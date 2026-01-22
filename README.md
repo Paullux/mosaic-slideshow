@@ -9,7 +9,7 @@ Conçu pour fonctionner comme :
 - page web plein écran (navigateur, borne, écran secondaire)
 
 ## Exemple
-👉 https://mosaic-slideshow.github.io/
+👉 https://paullux.github.io/mosaic-slideshow/
 
 ## ✨ Fonctionnalités
 
@@ -115,7 +115,7 @@ Designed to be lightweight, privacy-friendly, and usable both locally and online
 Each tile animates independently, zones recompose over time, and the layout stays organic and alive.
 
 ## Example
-👉 https://mosaic-slideshow.github.io/
+👉 https://paullux.github.io/mosaic-slideshow/
 
 ## ✨ Features
 - Dynamic mosaic grid
