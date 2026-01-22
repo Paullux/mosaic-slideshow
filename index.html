@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mosaic Wallpaper - Zones dynamiques</title>
+  <style>
+    :root{
+      --gap: 12px;
+      --fade-ms: 750ms;
+      --tile-duration-ms: 14000ms;
+      --swap-every-ms: 2600ms;
+      --clock-size: clamp(28px, 4vw, 56px);
+      --tile-radius: 22px;
+    }
+
+    html, body{
+      height: 100%;
+      margin: 0;
+      background: #000;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif;
+      color: #fff;
+    }
+
+    /* Scene */
+    #stage{
+      position: fixed;
+      inset: 0;
+      background: #000;
+    }
+
+    /* Grid */
+    .grid{
+      position: absolute;
+      inset: 0;
+      padding: var(--gap);
+      display: grid;
+      gap: var(--gap);
+      grid-auto-flow: dense;
+      background: #000;
+      align-content: stretch;
+      justify-content: stretch;
+    }
+
+    /* Tiles */
+    .tile{
+      position: relative;
+      border-radius: var(--tile-radius);
+      overflow: hidden;
+      background: rgba(255,255,255,.03);
+      box-shadow: 0 18px 55px rgba(0,0,0,.55);
+      transform: scale(.985);
+      opacity: 0.999;
+      animation: pop 650ms ease forwards;
+    }
+
+    @keyframes pop{
+      from{ transform: scale(.965); opacity: 0; }
+      to{ transform: scale(1); opacity: 1; }
+    }
+
+    /* Layers (crossfade) */
+    .img{
+      position: absolute;
+      inset: 0;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: cover;
+      opacity: 0;
+      transition: opacity var(--fade-ms) ease;
+      will-change: transform, opacity;
+      transform: scale(1.01);
+      filter: saturate(1.06) contrast(1.06) brightness(1.06);
+    }
+    .img.is-visible{ opacity: 1; }
+
+    .img.kenburns{
+      animation: kenburns var(--tile-duration-ms) ease-in-out forwards;
+    }
+
+    @keyframes kenburns{
+      0%   { transform: scale(1.03) translate3d(var(--tx,0px), var(--ty,0px), 0); }
+      50%  { transform: scale(1.08) translate3d(calc(var(--tx,0px) * -0.25), calc(var(--ty,0px) * -0.25), 0); }
+      100% { transform: scale(1.04) translate3d(calc(var(--tx,0px) * -0.6), calc(var(--ty,0px) * -0.6), 0); }
+    }
+
+    /* Overlay: léger voile (pas trop sombre) */
+    .vignette{
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at center, rgba(0,0,0,.00), rgba(0,0,0,.22)),
+        linear-gradient(to bottom, rgba(0,0,0,.10), rgba(0,0,0,.00) 40%, rgba(0,0,0,.14));
+      pointer-events: none;
+    }
+
+    .clock{
+      position: fixed;
+      top: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: var(--clock-size);
+      font-weight: 650;
+      letter-spacing: 0.02em;
+      text-shadow: 0 10px 30px rgba(0,0,0,.55);
+      padding: 10px 18px;
+      border-radius: 18px;
+      background: rgba(0,0,0,.18);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      user-select: none;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="grid" class="grid"></div>
+  </div>
+  <div class="vignette"></div>
+  <div id="clock" class="clock">--:--:--</div>
+  
+  <script src="Diaporama/fond_d_ecran.js"></script>
+  <script src="image_default.js"></script>
+  <script>
+    // ----------------------------
+    // Reglages grille (8x6 marche bien en 3440x1440)
+    // ----------------------------
+    const GRID_COLS = 8;
+    const GRID_ROWS = 6;
+
+    // Timings (en millisecondes)
+    const TIMING = {
+      imageSwap: 2600,        // Changement d'image sur une tuile aléatoire
+      zoneSwapMin: 4000,      // Recalcul de zone minimum (4s)
+      zoneSwapMax: 8000,      // Recalcul de zone maximum (8s)
+    };
+
+    // Ton HTML est dans /index.html
+    // Tes fonds personnels sont dans /Diaporama/
+    // Les fonds par défaut et public sont en ligne
+    function loadConfig(){
+      return window.MOSAIC_CONFIG || window.MOSAIC_DEFAULT_CONFIG;
+    }
+
+    function normalize(cfg){
+      if (!cfg || !cfg.images) return [];
+      if (cfg.type === "local"){
+        const base = cfg.baseDir || "";
+        return cfg.images.map(x => encodeURI(base + x));
+      }
+      return cfg.images;
+    }
+
+    // ensuite dans ton init:
+    let SOURCES = [];
+    const USED = new Set();
+
+    // ----------------------------
+    // Spans possibles (packing)
+    // - tu peux ajuster les poids
+    // ----------------------------
+    const SPANS = [
+      { c: 8, r: 4, w: 1 },
+      { c: 6, r: 3, w: 2 },
+      { c: 6, r: 2, w: 3 },
+      { c: 4, r: 3, w: 4 },
+      { c: 4, r: 2, w: 9 },
+      { c: 3, r: 2, w: 12 },
+      { c: 2, r: 2, w: 18 },
+      { c: 2, r: 1, w: 20 },
+      { c: 1, r: 1, w: 40 },
+    ];
+
+    // Zones a "muter" (brique-par-brique)
+    // (c,r) = taille de zone. On la place a un (x,y) aleatoire valide.
+    const ZONES = [
+      { c: 6, r: 2 }, { c: 4, r: 2 }, { c: 4, r: 3 }, { c: 3, r: 2 }, { c: 6, r: 3 }
+    ];
+
+    // ----------------------------
+    // DOM + CSS vars
+    // ----------------------------
+    const gridEl = document.getElementById("grid");
+
+    function cssVarMs(name){
+      const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      return Number(String(v).replace("ms","").trim());
+    }
+    const fadeMs = cssVarMs("--fade-ms");
+
+    // Fixe la grille
+    function setGridSize(cols, rows){
+      gridEl.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      gridEl.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+    }
+    setGridSize(GRID_COLS, GRID_ROWS);
+
+    // Horloge
+    function setClock(){
+      const el = document.getElementById("clock");
+      const d = new Date();
+      const hh = String(d.getHours()).padStart(2,"0");
+      const mm = String(d.getMinutes()).padStart(2,"0");
+      const ss = String(d.getSeconds()).padStart(2,"0");
+      el.textContent = `${hh}:${mm}:${ss}`;
+    }
+    setClock();
+    setInterval(setClock, 1000);
+
+    // ----------------------------
+    // Utils images
+    // ----------------------------
+    function randomPan(){
+      const tx = (Math.random() * 60 - 30).toFixed(1) + "px";
+      const ty = (Math.random() * 60 - 30).toFixed(1) + "px";
+      return { tx, ty };
+    }
+
+    function preload(url){
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = url;
+      });
+    }
+
+    function pickDifferent(currentUrl){
+      if (!SOURCES.length) return null;
+
+      const avoid = new Set(USED);
+      if (currentUrl) avoid.add(currentUrl);
+
+      let candidates = SOURCES.filter(u => !avoid.has(u));
+      if (!candidates.length) candidates = SOURCES.filter(u => u !== currentUrl);
+      if (!candidates.length) candidates = SOURCES;
+
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
+    // ----------------------------
+    // Tuiles
+    // ----------------------------
+    function makeTile(c, r, x, y){
+      const tile = document.createElement("div");
+      tile.className = "tile";
+
+      // IMPORTANT: on fixe la position, sinon "dense" peut reshuffle
+      tile.style.gridColumnStart = (x + 1);
+      tile.style.gridRowStart = (y + 1);
+      tile.style.gridColumnEnd = `span ${c}`;
+      tile.style.gridRowEnd = `span ${r}`;
+
+      const a = document.createElement("div");
+      const b = document.createElement("div");
+      a.className = "img";
+      b.className = "img";
+      tile.appendChild(a);
+      tile.appendChild(b);
+
+      return {
+        el: tile,
+        x, y, c, r,
+        front: a,
+        back: b,
+        url: null
+      };
+    }
+
+    function applyImage(tile, url, immediate){
+      const back = tile.back;
+      const front = tile.front;
+
+      back.style.backgroundImage = `url("${url}")`;
+      const pan = randomPan();
+      back.style.setProperty("--tx", pan.tx);
+      back.style.setProperty("--ty", pan.ty);
+
+      back.classList.remove("kenburns");
+      void back.offsetWidth;
+      back.classList.add("kenburns");
+
+      back.classList.add("is-visible");
+      if (immediate){
+        front.classList.remove("is-visible");
+      } else {
+        setTimeout(() => front.classList.remove("is-visible"), fadeMs + 30);
+      }
+
+      tile.url = url;
+
+      // swap couches
+      tile.front = back;
+      tile.back = front;
+    }
+
+    async function setTileImage(tile, immediate){
+      const next = pickDifferent(tile.url);
+      if (!next) return;
+
+      let ok = await preload(next);
+      if (!ok && SOURCES.length > 1){
+        for (let i = 0; i < 6 && !ok; i++){
+          const retry = pickDifferent(next);
+          ok = await preload(retry);
+          if (ok){
+            // libere l'ancienne
+            if (tile.url) USED.delete(tile.url);
+            USED.add(retry);
+            applyImage(tile, retry, immediate);
+            return;
+          }
+        }
+      }
+
+      // libere l'ancienne
+      if (tile.url) USED.delete(tile.url);
+      USED.add(next);
+      applyImage(tile, next, immediate);
+    }
+
+    // ----------------------------
+    // Occupancy (grille logique)
+    // occ[y][x] = id (number) ou -1
+    // ----------------------------
+    let occ = Array.from({length: GRID_ROWS}, () => Array(GRID_COLS).fill(-1));
+    let tiles = [];
+    let tileIdCounter = 0;
+
+    function fillOccForTile(tile, id){
+      for (let yy = tile.y; yy < tile.y + tile.r; yy++){
+        for (let xx = tile.x; xx < tile.x + tile.c; xx++){
+          occ[yy][xx] = id;
+        }
+      }
+    }
+
+    function clearOccForTile(tile){
+      for (let yy = tile.y; yy < tile.y + tile.r; yy++){
+        for (let xx = tile.x; xx < tile.x + tile.c; xx++){
+          occ[yy][xx] = -1;
+        }
+      }
+    }
+
+    // ----------------------------
+    // Packing complet (au demarrage)
+    // ----------------------------
+    function canPlaceLocal(localOcc, x, y, c, r, W, H){
+      if (x + c > W || y + r > H) return false;
+      for (let yy = y; yy < y + r; yy++){
+        for (let xx = x; xx < x + c; xx++){
+          if (localOcc[yy][xx]) return false;
+        }
+      }
+      return true;
+    }
+
+    function markLocal(localOcc, x, y, c, r, val=true){
+      for (let yy = y; yy < y + r; yy++){
+        for (let xx = x; xx < x + c; xx++){
+          localOcc[yy][xx] = val;
+        }
+      }
+    }
+
+    function measureFreeRect(localOcc, x, y, W, H){
+      let freeW = 0;
+      while (x + freeW < W && !localOcc[y][x + freeW]) freeW++;
+
+      let freeH = 0;
+      outer:
+      while (y + freeH < H){
+        for (let xx = x; xx < x + freeW; xx++){
+          if (localOcc[y + freeH][xx]) break outer;
+        }
+        freeH++;
+      }
+      return { freeW, freeH };
+    }
+
+    function weightedPick(candidates){
+      // candidates = [{c,r,w}, ...]
+      const total = candidates.reduce((s, it) => s + (it.w || 1), 0);
+      let r = Math.random() * total;
+      for (const it of candidates){
+        r -= (it.w || 1);
+        if (r <= 0) return it;
+      }
+      return candidates[candidates.length - 1];
+    }
+
+    function pickSpanForHole(freeW, freeH){
+      let candidates = SPANS.filter(s => s.c <= freeW && s.r <= freeH);
+      if (!candidates.length) return { c: 1, r: 1, w: 1 };
+
+      // On favorise les grosses tuiles si gros trou
+      candidates.sort((a,b) => (b.c*b.r) - (a.c*a.r));
+      const top = candidates.slice(0, Math.min(6, candidates.length));
+      return weightedPick(top);
+    }
+
+    function packRectangles(width, height){
+      const localOcc = Array.from({length: height}, () => Array(width).fill(false));
+      const rects = [];
+
+      for (let y = 0; y < height; y++){
+        for (let x = 0; x < width; x++){
+          if (localOcc[y][x]) continue;
+
+          const { freeW, freeH } = measureFreeRect(localOcc, x, y, width, height);
+          let span = pickSpanForHole(freeW, freeH);
+
+          let c = span.c, r = span.r;
+
+          // securite: degrade si ca passe pas
+          while (!canPlaceLocal(localOcc, x, y, c, r, width, height)){
+            if (c > 1) c--;
+            else if (r > 1) r--;
+            else break;
+          }
+
+          markLocal(localOcc, x, y, c, r, true);
+          rects.push({ x, y, c, r });
+        }
+      }
+
+      return rects;
+    }
+
+    async function buildFullGrid(){
+      gridEl.innerHTML = "";
+      USED.clear();
+      tiles = [];
+      tileIdCounter = 0;
+      occ = Array.from({length: GRID_ROWS}, () => Array(GRID_COLS).fill(-1));
+
+      const rects = packRectangles(GRID_COLS, GRID_ROWS);
+
+      for (const r of rects){
+        const tile = makeTile(r.c, r.r, r.x, r.y);
+        const id = tileIdCounter++;
+        fillOccForTile(tile, id);
+
+        gridEl.appendChild(tile.el);
+        tiles.push({ id, tile });
+
+        await setTileImage(tile, true);
+      }
+    }
+
+    // ----------------------------
+    // Swap "brique par brique" = swap d'une zone
+    // CORRECTION: on repack TOUTE la grille après suppression
+    // ----------------------------
+    function rectIntersects(a, b){
+      return !(a.x + a.c <= b.x || b.x + b.c <= a.x || a.y + a.r <= b.y || b.y + b.r <= a.y);
+    }
+
+    function pickRandomZone(){
+      const z = ZONES[Math.floor(Math.random() * ZONES.length)];
+      const zx = Math.floor(Math.random() * (GRID_COLS - z.c + 1));
+      const zy = Math.floor(Math.random() * (GRID_ROWS - z.r + 1));
+      return { x: zx, y: zy, c: z.c, r: z.r };
+    }
+
+    async function swapZone(){
+      if (zoneRunning) return;
+      zoneRunning = true;
+      try {
+        if (!tiles.length) return;
+
+        const zone = pickRandomZone();
+
+        // 1) trouve tuiles affectees
+        const affected = [];
+        for (const t of tiles){
+          const tile = t.tile;
+          if (rectIntersects(tile, zone)) affected.push(t);
+        }
+        if (!affected.length) return;
+
+        // 2) retire les tuiles (occ + USED + DOM)
+        for (const t of affected){
+          const tile = t.tile;
+          clearOccForTile(tile);
+          if (tile.url) USED.delete(tile.url);
+          tile.el.remove();
+        }
+        tiles = tiles.filter(t => !affected.includes(t));
+
+        // 3) CORRECTION: repack TOUTE la grille pour combler les trous
+        // Créer une carte d'occupation basée sur les tuiles restantes
+        const globalOcc = Array.from({length: GRID_ROWS}, () => Array(GRID_COLS).fill(false));
+        for (const t of tiles){
+          const tile = t.tile;
+          for (let yy = tile.y; yy < tile.y + tile.r; yy++){
+            for (let xx = tile.x; xx < tile.x + tile.c; xx++){
+              globalOcc[yy][xx] = true;
+            }
+          }
+        }
+
+        // Trouver tous les trous et les combler
+        const newRects = [];
+        for (let y = 0; y < GRID_ROWS; y++){
+          for (let x = 0; x < GRID_COLS; x++){
+            if (globalOcc[y][x]) continue;
+
+            const { freeW, freeH } = measureFreeRect(globalOcc, x, y, GRID_COLS, GRID_ROWS);
+            let span = pickSpanForHole(freeW, freeH);
+            let c = span.c, r = span.r;
+
+            while (!canPlaceLocal(globalOcc, x, y, c, r, GRID_COLS, GRID_ROWS)){
+              if (c > 1) c--;
+              else if (r > 1) r--;
+              else break;
+            }
+
+            markLocal(globalOcc, x, y, c, r, true);
+            newRects.push({ x, y, c, r });
+          }
+        }
+
+        // 4) créer les nouvelles tuiles
+        for (const r of newRects){
+          const tile = makeTile(r.c, r.r, r.x, r.y);
+          const id = tileIdCounter++;
+          fillOccForTile(tile, id);
+
+          gridEl.appendChild(tile.el);
+          tiles.push({ id, tile });
+
+          await setTileImage(tile, true);
+        }
+      } finally {
+        zoneRunning = false;
+      }
+    }
+
+    // ----------------------------
+    // En plus: swap d'image sur une tuile aleatoire (petit mouvement continu)
+    // ----------------------------
+    async function swapOneTileImage(){
+      if (!tiles.length) return;
+      const pick = tiles[Math.floor(Math.random() * tiles.length)].tile;
+      await setTileImage(pick, false);
+    }
+
+    // ----------------------------
+    // Boucle
+    // ----------------------------
+    let timer = null;
+    let zoneTimer = null;
+    let initRunning = false;
+    let zoneRunning = false;
+
+    function scheduleZone(){
+      const delay =
+        TIMING.zoneSwapMin +
+        Math.floor(Math.random() * (TIMING.zoneSwapMax - TIMING.zoneSwapMin + 1));
+
+      zoneTimer = setTimeout(async () => {
+        await swapZone();
+        scheduleZone();
+      }, delay);
+    }
+
+    async function init(){
+      if (initRunning) return;
+      initRunning = true;
+
+      try {
+        if (timer) clearInterval(timer);
+        if (zoneTimer) clearTimeout(zoneTimer);
+        zoneTimer = null;
+
+        await buildFullGrid();
+
+        timer = setInterval(() => swapOneTileImage(), TIMING.imageSwap);
+        scheduleZone();
+      } finally {
+        initRunning = false;
+      }
+    }
+
+    // Rebuild si resize (rare en wallpaper)
+    let resizeTO = null;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTO);
+      resizeTO = setTimeout(() => init(), 250);
+    }, { passive: true });
+
+    window.addEventListener("load", async () => {
+      SOURCES = normalize(loadConfig());
+      if (!SOURCES.length) {
+        console.error("Aucune image chargee");
+        return;
+      }
+      await init();
+    });
+  </script>
+</body>
+</html>
