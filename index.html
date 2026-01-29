@@ -15,10 +15,10 @@
 
       /* Nouveau: force + opacite du fond flou */
       --bg-blur: 50px;         /* monte a 80-110px si tu veux vraiment fort */
-      --bg-dim: 0.30;           /* 0.55-0.75 selon ton rendu */
+      --bg-dim: 0.55;           /* 0.55-0.75 selon ton rendu */
       --bg-saturate: 1.10;
       --bg-contrast: 1.08;
-      --bg-brightness: 1.02;
+      --bg-brightness: 5.02;
     }
 
     html, body{
@@ -36,6 +36,7 @@
       inset: 0;
       background: #503820;
       z-index: 0;
+      transition: background 800ms ease;
     }
 
     /* Nouveau: Background floute derriere */
@@ -242,6 +243,13 @@
 
       bgBack.style.backgroundImage = `url("${next}")`;
       bgBack.classList.add("is-visible");
+
+      // Rendre transparent après chargement réussi
+      const bgEl = document.getElementById("bg");
+      if (bg.style.opacity !== 0) {
+        bg.style.opacity = .4;
+      }
+
       if (immediate){
         bgFront.classList.remove("is-visible");
       } else {
