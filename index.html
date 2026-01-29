@@ -12,6 +12,13 @@
       --swap-every-ms: 2600ms;
       --clock-size: clamp(28px, 4vw, 56px);
       --tile-radius: 22px;
+
+      /* Nouveau: force + opacite du fond flou */
+      --bg-blur: 80px;         /* monte a 80-110px si tu veux vraiment fort */
+      --bg-dim: 0.70;           /* 0.55-0.75 selon ton rendu */
+      --bg-saturate: 1.10;
+      --bg-contrast: 1.08;
+      --bg-brightness: 1.02;
     }
 
     html, body{
@@ -27,7 +34,43 @@
     #stage{
       position: fixed;
       inset: 0;
-      background: #000;
+      background: #503820;
+    }
+
+    /* Nouveau: Background floute derriere */
+    #bg{
+      position: absolute;
+      inset: -120px; /* important: evite les bords noirs dus au blur */
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.3;
+    }
+    .bg-layer{
+      position: absolute;
+      inset: 0;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: cover;
+      opacity: 0;
+      transition: opacity 1400ms ease;
+      will-change: opacity, transform, filter;
+      transform: scale(1.08);
+      filter:
+        blur(var(--bg-blur))
+        saturate(var(--bg-saturate))
+        contrast(var(--bg-contrast))
+        brightness(var(--bg-brightness));
+    }
+    .bg-layer.is-visible{ opacity: var(--bg-dim); }
+
+    /* Petit mouvement lent (optionnel mais ca fait vivant) */
+    .bg-layer.drift{
+      animation: bgdrift 22s ease-in-out infinite;
+    }
+    @keyframes bgdrift{
+      0%   { transform: scale(1.10) translate3d(0px, 0px, 0); }
+      50%  { transform: scale(1.14) translate3d(-22px, 14px, 0); }
+      100% { transform: scale(1.10) translate3d(0px, 0px, 0); }
     }
 
     /* Grid */
@@ -38,7 +81,7 @@
       display: grid;
       gap: var(--gap);
       grid-auto-flow: dense;
-      background: #000;
+      background: transparent;
       align-content: stretch;
       justify-content: stretch;
     }
@@ -116,6 +159,12 @@
 </head>
 <body>
   <div id="stage">
+    <!-- Nouveau: fond floute -->
+    <div id="bg">
+      <div id="bgA" class="bg-layer drift"></div>
+      <div id="bgB" class="bg-layer drift"></div>
+    </div>
+
     <div id="grid" class="grid"></div>
   </div>
   <div class="vignette"></div>
@@ -156,6 +205,54 @@
     // ensuite dans ton init:
     let SOURCES = [];
     const USED = new Set();
+
+    // ----------------------------
+    // Nouveau: fond floute plein ecran
+    // ----------------------------
+    const bgA = document.getElementById("bgA");
+    const bgB = document.getElementById("bgB");
+    let bgFront = bgA;
+    let bgBack = bgB;
+    let bgUrl = null;
+
+    function pickAnyDifferent(currentUrl){
+      if (!SOURCES.length) return null;
+      let candidates = SOURCES.filter(u => u !== currentUrl);
+      if (!candidates.length) candidates = SOURCES;
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
+    function preload(url){
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = url;
+      });
+    }
+
+    async function setBlurBackground(immediate){
+      const next = pickAnyDifferent(bgUrl);
+      if (!next) return;
+
+      let ok = await preload(next);
+      if (!ok) return;
+
+      bgBack.style.backgroundImage = `url("${next}")`;
+      bgBack.classList.add("is-visible");
+      if (immediate){
+        bgFront.classList.remove("is-visible");
+      } else {
+        setTimeout(() => bgFront.classList.remove("is-visible"), 1450);
+      }
+
+      bgUrl = next;
+
+      // swap
+      const tmp = bgFront;
+      bgFront = bgBack;
+      bgBack = tmp;
+    }
 
     // ----------------------------
     // Spans possibles (packing)
@@ -216,15 +313,6 @@
       const tx = (Math.random() * 60 - 30).toFixed(1) + "px";
       const ty = (Math.random() * 60 - 30).toFixed(1) + "px";
       return { tx, ty };
-    }
-
-    function preload(url){
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve(true);
-        img.onerror = () => resolve(false);
-        img.src = url;
-      });
     }
 
     function pickDifferent(currentUrl){
@@ -439,6 +527,7 @@
 
       const rects = packRectangles(GRID_COLS, GRID_ROWS);
 
+      const promises = [];
       for (const r of rects){
         const tile = makeTile(r.c, r.r, r.x, r.y);
         const id = tileIdCounter++;
@@ -447,8 +536,9 @@
         gridEl.appendChild(tile.el);
         tiles.push({ id, tile });
 
-        await setTileImage(tile, true);
+        promises.push(setTileImage(tile, true));
       }
+      await Promise.all(promises);
     }
 
     // ----------------------------
@@ -524,7 +614,8 @@
           }
         }
 
-        // 4) créer les nouvelles tuiles
+        // 4) créer les nouvelles tuiles (en parallèle)
+        const promises = [];
         for (const r of newRects){
           const tile = makeTile(r.c, r.r, r.x, r.y);
           const id = tileIdCounter++;
@@ -533,8 +624,9 @@
           gridEl.appendChild(tile.el);
           tiles.push({ id, tile });
 
-          await setTileImage(tile, true);
+          promises.push(setTileImage(tile, true));
         }
+        await Promise.all(promises);
       } finally {
         zoneRunning = false;
       }
@@ -554,6 +646,7 @@
     // ----------------------------
     let timer = null;
     let zoneTimer = null;
+    let bgTimer = null;
     let initRunning = false;
     let zoneRunning = false;
 
@@ -575,12 +668,19 @@
       try {
         if (timer) clearInterval(timer);
         if (zoneTimer) clearTimeout(zoneTimer);
+        if (bgTimer) clearInterval(bgTimer);
         zoneTimer = null;
 
         await buildFullGrid();
+        await setBlurBackground(true);
 
         timer = setInterval(() => swapOneTileImage(), TIMING.imageSwap);
         scheduleZone();
+
+        // fond floute: change lentement (independant du mosaic)
+        bgTimer = setInterval(() => {
+          setBlurBackground(false);
+        }, 12000);
       } finally {
         initRunning = false;
       }
