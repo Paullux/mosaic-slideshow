@@ -15,7 +15,7 @@
 
       /* Nouveau: force + opacite du fond flou */
       --bg-blur: 80px;         /* monte a 80-110px si tu veux vraiment fort */
-      --bg-dim: 0.70;           /* 0.55-0.75 selon ton rendu */
+      --bg-dim: 0.30;           /* 0.55-0.75 selon ton rendu */
       --bg-saturate: 1.10;
       --bg-contrast: 1.08;
       --bg-brightness: 1.02;
@@ -43,7 +43,7 @@
       inset: -120px; /* important: evite les bords noirs dus au blur */
       z-index: 0;
       pointer-events: none;
-      opacity: 0.3;
+      /*opacity: 0.3;*/
     }
     .bg-layer{
       position: absolute;
@@ -518,27 +518,37 @@
       return rects;
     }
 
-    async function buildFullGrid(){
+    async function createTilesFromRects(rects, immediate = true) {
+      const promises = [];
+      const newTiles = [];
+      
+      for (const r of rects) {
+        const tile = makeTile(r.c, r.r, r.x, r.y);
+        const id = tileIdCounter++;
+        fillOccForTile(tile, id);
+        
+        gridEl.appendChild(tile.el);
+        const tileObj = { id, tile };
+        tiles.push(tileObj);
+        newTiles.push(tileObj);
+        
+        promises.push(setTileImage(tile, immediate));
+      }
+      
+      await Promise.all(promises);
+      return newTiles;
+    }
+
+    // buildFullGrid devient plus simple
+    async function buildFullGrid() {
       gridEl.innerHTML = "";
       USED.clear();
       tiles = [];
       tileIdCounter = 0;
       occ = Array.from({length: GRID_ROWS}, () => Array(GRID_COLS).fill(-1));
-
+      
       const rects = packRectangles(GRID_COLS, GRID_ROWS);
-
-      const promises = [];
-      for (const r of rects){
-        const tile = makeTile(r.c, r.r, r.x, r.y);
-        const id = tileIdCounter++;
-        fillOccForTile(tile, id);
-
-        gridEl.appendChild(tile.el);
-        tiles.push({ id, tile });
-
-        promises.push(setTileImage(tile, true));
-      }
-      await Promise.all(promises);
+      await createTilesFromRects(rects, true);
     }
 
     // ----------------------------
@@ -556,77 +566,65 @@
       return { x: zx, y: zy, c: z.c, r: z.r };
     }
 
-    async function swapZone(){
+    async function swapZone() {
       if (zoneRunning) return;
       zoneRunning = true;
       try {
         if (!tiles.length) return;
-
+        
         const zone = pickRandomZone();
-
-        // 1) trouve tuiles affectees
+        
+        // 1) trouve tuiles affectées
         const affected = [];
-        for (const t of tiles){
+        for (const t of tiles) {
           const tile = t.tile;
           if (rectIntersects(tile, zone)) affected.push(t);
         }
         if (!affected.length) return;
-
-        // 2) retire les tuiles (occ + USED + DOM)
-        for (const t of affected){
+        
+        // 2) retire les tuiles
+        for (const t of affected) {
           const tile = t.tile;
           clearOccForTile(tile);
           if (tile.url) USED.delete(tile.url);
           tile.el.remove();
         }
         tiles = tiles.filter(t => !affected.includes(t));
-
-        // 3) CORRECTION: repack TOUTE la grille pour combler les trous
-        // Créer une carte d'occupation basée sur les tuiles restantes
+        
+        // 3) repack pour combler les trous
         const globalOcc = Array.from({length: GRID_ROWS}, () => Array(GRID_COLS).fill(false));
-        for (const t of tiles){
+        for (const t of tiles) {
           const tile = t.tile;
-          for (let yy = tile.y; yy < tile.y + tile.r; yy++){
-            for (let xx = tile.x; xx < tile.x + tile.c; xx++){
+          for (let yy = tile.y; yy < tile.y + tile.r; yy++) {
+            for (let xx = tile.x; xx < tile.x + tile.c; xx++) {
               globalOcc[yy][xx] = true;
             }
           }
         }
-
-        // Trouver tous les trous et les combler
+        
         const newRects = [];
-        for (let y = 0; y < GRID_ROWS; y++){
-          for (let x = 0; x < GRID_COLS; x++){
+        for (let y = 0; y < GRID_ROWS; y++) {
+          for (let x = 0; x < GRID_COLS; x++) {
             if (globalOcc[y][x]) continue;
-
+            
             const { freeW, freeH } = measureFreeRect(globalOcc, x, y, GRID_COLS, GRID_ROWS);
             let span = pickSpanForHole(freeW, freeH);
             let c = span.c, r = span.r;
-
-            while (!canPlaceLocal(globalOcc, x, y, c, r, GRID_COLS, GRID_ROWS)){
+            
+            while (!canPlaceLocal(globalOcc, x, y, c, r, GRID_COLS, GRID_ROWS)) {
               if (c > 1) c--;
               else if (r > 1) r--;
               else break;
             }
-
+            
             markLocal(globalOcc, x, y, c, r, true);
             newRects.push({ x, y, c, r });
           }
         }
-
-        // 4) créer les nouvelles tuiles (en parallèle)
-        const promises = [];
-        for (const r of newRects){
-          const tile = makeTile(r.c, r.r, r.x, r.y);
-          const id = tileIdCounter++;
-          fillOccForTile(tile, id);
-
-          gridEl.appendChild(tile.el);
-          tiles.push({ id, tile });
-
-          promises.push(setTileImage(tile, true));
-        }
-        await Promise.all(promises);
+        
+        // 4) créer les nouvelles tuiles (fonction réutilisée)
+        await createTilesFromRects(newRects, true);
+        
       } finally {
         zoneRunning = false;
       }
