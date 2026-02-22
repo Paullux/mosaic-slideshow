@@ -1,11 +1,12 @@
 <!doctype html>
 <html lang="fr">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Mosaic Wallpaper - Zones dynamiques</title>
   <style>
-    :root{
+    :root {
       --gap: 12px;
       --fade-ms: 750ms;
       --tile-duration-ms: 14000ms;
@@ -14,14 +15,17 @@
       --tile-radius: 22px;
 
       /* Nouveau: force + opacite du fond flou */
-      --bg-blur: 50px;         /* monte a 80-110px si tu veux vraiment fort */
-      --bg-dim: 0.55;           /* 0.55-0.75 selon ton rendu */
+      --bg-blur: 50px;
+      /* monte a 80-110px si tu veux vraiment fort */
+      --bg-dim: 0.55;
+      /* 0.55-0.75 selon ton rendu */
       --bg-saturate: 1.10;
       --bg-contrast: 1.08;
       --bg-brightness: 5.02;
     }
 
-    html, body{
+    html,
+    body {
       height: 100%;
       margin: 0;
       background: #000;
@@ -31,7 +35,7 @@
     }
 
     /* Scene */
-    #stage{
+    #stage {
       position: fixed;
       inset: 0;
       background: #503820;
@@ -40,14 +44,16 @@
     }
 
     /* Nouveau: Background floute derriere */
-    #bg{
+    #bg {
       position: absolute;
-      inset: -100px; /* important: evite les bords noirs dus au blur */
+      inset: -100px;
+      /* important: evite les bords noirs dus au blur */
       z-index: 1;
       pointer-events: none;
       /*opacity: 0.3;*/
     }
-    .bg-layer{
+
+    .bg-layer {
       position: absolute;
       inset: 0;
       background-position: center;
@@ -58,25 +64,34 @@
       will-change: opacity, transform, filter;
       transform: scale(1.08);
       filter:
-        blur(var(--bg-blur))
-        saturate(var(--bg-saturate))
-        contrast(var(--bg-contrast))
-        brightness(var(--bg-brightness));
+        blur(var(--bg-blur)) saturate(var(--bg-saturate)) contrast(var(--bg-contrast)) brightness(var(--bg-brightness));
     }
-    .bg-layer.is-visible{ opacity: var(--bg-dim); }
+
+    .bg-layer.is-visible {
+      opacity: var(--bg-dim);
+    }
 
     /* Petit mouvement lent (optionnel mais ca fait vivant) */
-    .bg-layer.drift{
+    .bg-layer.drift {
       animation: bgdrift 22s ease-in-out infinite;
     }
-    @keyframes bgdrift{
-      0%   { transform: scale(1.10) translate3d(0px, 0px, 0); }
-      50%  { transform: scale(1.14) translate3d(-22px, 14px, 0); }
-      100% { transform: scale(1.10) translate3d(0px, 0px, 0); }
+
+    @keyframes bgdrift {
+      0% {
+        transform: scale(1.10) translate3d(0px, 0px, 0);
+      }
+
+      50% {
+        transform: scale(1.14) translate3d(-22px, 14px, 0);
+      }
+
+      100% {
+        transform: scale(1.10) translate3d(0px, 0px, 0);
+      }
     }
 
     /* Grid */
-    .grid{
+    .grid {
       position: absolute;
       inset: 0;
       padding: var(--gap);
@@ -90,24 +105,31 @@
     }
 
     /* Tiles */
-    .tile{
+    .tile {
       position: relative;
       border-radius: var(--tile-radius);
       overflow: hidden;
-      background: rgba(0,0,0,.6);
-      box-shadow: 0 18px 55px rgba(0,0,0,.55);
+      background: rgba(0, 0, 0, .6);
+      box-shadow: 0 18px 55px rgba(0, 0, 0, .55);
       transform: scale(.985);
       opacity: 0.999;
       animation: pop 650ms ease forwards;
     }
 
-    @keyframes pop{
-      from{ transform: scale(.965); opacity: 0; }
-      to{ transform: scale(1); opacity: 1; }
+    @keyframes pop {
+      from {
+        transform: scale(.965);
+        opacity: 0;
+      }
+
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
     }
 
     /* Layers (crossfade) */
-    .img{
+    .img {
       position: absolute;
       inset: 0;
       background-position: center;
@@ -119,29 +141,40 @@
       transform: scale(1.01);
       filter: saturate(1.06) contrast(1.06) brightness(1.06);
     }
-    .img.is-visible{ opacity: 1; }
 
-    .img.kenburns{
+    .img.is-visible {
+      opacity: 1;
+    }
+
+    .img.kenburns {
       animation: kenburns var(--tile-duration-ms) ease-in-out forwards;
     }
 
-    @keyframes kenburns{
-      0%   { transform: scale(1.03) translate3d(var(--tx,0px), var(--ty,0px), 0); }
-      50%  { transform: scale(1.08) translate3d(calc(var(--tx,0px) * -0.25), calc(var(--ty,0px) * -0.25), 0); }
-      100% { transform: scale(1.04) translate3d(calc(var(--tx,0px) * -0.6), calc(var(--ty,0px) * -0.6), 0); }
+    @keyframes kenburns {
+      0% {
+        transform: scale(1.15) translate3d(var(--tx, 0px), var(--ty, 0px), 0);
+      }
+
+      50% {
+        transform: scale(1.22) translate3d(calc(var(--tx, 0px) * -0.25), calc(var(--ty, 0px) * -0.25), 0);
+      }
+
+      100% {
+        transform: scale(1.18) translate3d(calc(var(--tx, 0px) * -0.6), calc(var(--ty, 0px) * -0.6), 0);
+      }
     }
 
     /* Overlay: léger voile (pas trop sombre) */
-    .vignette{
+    .vignette {
       position: fixed;
       inset: 0;
       background:
-        radial-gradient(ellipse at center, rgba(0,0,0,.00), rgba(0,0,0,.22)),
-        linear-gradient(to bottom, rgba(0,0,0,.10), rgba(0,0,0,.00) 40%, rgba(0,0,0,.14));
+        radial-gradient(ellipse at center, rgba(0, 0, 0, .00), rgba(0, 0, 0, .22)),
+        linear-gradient(to bottom, rgba(0, 0, 0, .10), rgba(0, 0, 0, .00) 40%, rgba(0, 0, 0, .14));
       pointer-events: none;
     }
 
-    .clock{
+    .clock {
       position: fixed;
       top: 22px;
       left: 50%;
@@ -149,10 +182,10 @@
       font-size: var(--clock-size);
       font-weight: 650;
       letter-spacing: 0.02em;
-      text-shadow: 0 10px 30px rgba(0,0,0,.55);
+      text-shadow: 0 10px 30px rgba(0, 0, 0, .55);
       padding: 10px 18px;
       border-radius: 18px;
-      background: rgba(0,0,0,.18);
+      background: rgba(0, 0, 0, .18);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       user-select: none;
@@ -160,6 +193,7 @@
     }
   </style>
 </head>
+
 <body>
   <div id="stage">
     <!-- Nouveau: fond floute -->
@@ -172,7 +206,7 @@
   </div>
   <div class="vignette"></div>
   <div id="clock" class="clock">--:--:--</div>
-  
+
   <script src="Diaporama/fond_d_ecran.js"></script>
   <script src="image_default.js"></script>
   <script>
@@ -192,13 +226,13 @@
     // Ton HTML est dans /index.html
     // Tes fonds personnels sont dans /Diaporama/
     // Les fonds par défaut et public sont en ligne
-    function loadConfig(){
+    function loadConfig() {
       return window.MOSAIC_CONFIG || window.MOSAIC_DEFAULT_CONFIG;
     }
 
-    function normalize(cfg){
+    function normalize(cfg) {
       if (!cfg || !cfg.images) return [];
-      if (cfg.type === "local"){
+      if (cfg.type === "local") {
         const base = cfg.baseDir || "";
         return cfg.images.map(x => encodeURI(base + x));
       }
@@ -218,14 +252,14 @@
     let bgBack = bgB;
     let bgUrl = null;
 
-    function pickAnyDifferent(currentUrl){
+    function pickAnyDifferent(currentUrl) {
       if (!SOURCES.length) return null;
       let candidates = SOURCES.filter(u => u !== currentUrl);
       if (!candidates.length) candidates = SOURCES;
       return candidates[Math.floor(Math.random() * candidates.length)];
     }
 
-    function preload(url){
+    function preload(url) {
       return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => resolve(true);
@@ -234,7 +268,7 @@
       });
     }
 
-    async function setBlurBackground(immediate){
+    async function setBlurBackground(immediate) {
       const next = pickAnyDifferent(bgUrl);
       if (!next) return;
 
@@ -250,7 +284,7 @@
         bg.style.opacity = .4;
       }
 
-      if (immediate){
+      if (immediate) {
         bgFront.classList.remove("is-visible");
       } else {
         setTimeout(() => bgFront.classList.remove("is-visible"), 1450);
@@ -291,26 +325,26 @@
     // ----------------------------
     const gridEl = document.getElementById("grid");
 
-    function cssVarMs(name){
+    function cssVarMs(name) {
       const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-      return Number(String(v).replace("ms","").trim());
+      return Number(String(v).replace("ms", "").trim());
     }
     const fadeMs = cssVarMs("--fade-ms");
 
     // Fixe la grille
-    function setGridSize(cols, rows){
+    function setGridSize(cols, rows) {
       gridEl.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
       gridEl.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
     }
     setGridSize(GRID_COLS, GRID_ROWS);
 
     // Horloge
-    function setClock(){
+    function setClock() {
       const el = document.getElementById("clock");
       const d = new Date();
-      const hh = String(d.getHours()).padStart(2,"0");
-      const mm = String(d.getMinutes()).padStart(2,"0");
-      const ss = String(d.getSeconds()).padStart(2,"0");
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      const ss = String(d.getSeconds()).padStart(2, "0");
       el.textContent = `${hh}:${mm}:${ss}`;
     }
     setClock();
@@ -319,13 +353,13 @@
     // ----------------------------
     // Utils images
     // ----------------------------
-    function randomPan(){
-      const tx = (Math.random() * 60 - 30).toFixed(1) + "px";
-      const ty = (Math.random() * 60 - 30).toFixed(1) + "px";
+    function randomPan() {
+      const tx = (Math.random() * 30 - 15).toFixed(1) + "px";
+      const ty = (Math.random() * 30 - 15).toFixed(1) + "px";
       return { tx, ty };
     }
 
-    function pickDifferent(currentUrl){
+    function pickDifferent(currentUrl) {
       if (!SOURCES.length) return null;
 
       const avoid = new Set(USED);
@@ -341,7 +375,7 @@
     // ----------------------------
     // Tuiles
     // ----------------------------
-    function makeTile(c, r, x, y){
+    function makeTile(c, r, x, y) {
       const tile = document.createElement("div");
       tile.className = "tile";
 
@@ -367,7 +401,7 @@
       };
     }
 
-    function applyImage(tile, url, immediate){
+    function applyImage(tile, url, immediate) {
       const back = tile.back;
       const front = tile.front;
 
@@ -381,7 +415,7 @@
       back.classList.add("kenburns");
 
       back.classList.add("is-visible");
-      if (immediate){
+      if (immediate) {
         front.classList.remove("is-visible");
       } else {
         setTimeout(() => front.classList.remove("is-visible"), fadeMs + 30);
@@ -394,16 +428,16 @@
       tile.back = front;
     }
 
-    async function setTileImage(tile, immediate){
+    async function setTileImage(tile, immediate) {
       const next = pickDifferent(tile.url);
       if (!next) return;
 
       let ok = await preload(next);
-      if (!ok && SOURCES.length > 1){
-        for (let i = 0; i < 6 && !ok; i++){
+      if (!ok && SOURCES.length > 1) {
+        for (let i = 0; i < 6 && !ok; i++) {
           const retry = pickDifferent(next);
           ok = await preload(retry);
-          if (ok){
+          if (ok) {
             // libere l'ancienne
             if (tile.url) USED.delete(tile.url);
             USED.add(retry);
@@ -423,21 +457,21 @@
     // Occupancy (grille logique)
     // occ[y][x] = id (number) ou -1
     // ----------------------------
-    let occ = Array.from({length: GRID_ROWS}, () => Array(GRID_COLS).fill(-1));
+    let occ = Array.from({ length: GRID_ROWS }, () => Array(GRID_COLS).fill(-1));
     let tiles = [];
     let tileIdCounter = 0;
 
-    function fillOccForTile(tile, id){
-      for (let yy = tile.y; yy < tile.y + tile.r; yy++){
-        for (let xx = tile.x; xx < tile.x + tile.c; xx++){
+    function fillOccForTile(tile, id) {
+      for (let yy = tile.y; yy < tile.y + tile.r; yy++) {
+        for (let xx = tile.x; xx < tile.x + tile.c; xx++) {
           occ[yy][xx] = id;
         }
       }
     }
 
-    function clearOccForTile(tile){
-      for (let yy = tile.y; yy < tile.y + tile.r; yy++){
-        for (let xx = tile.x; xx < tile.x + tile.c; xx++){
+    function clearOccForTile(tile) {
+      for (let yy = tile.y; yy < tile.y + tile.r; yy++) {
+        for (let xx = tile.x; xx < tile.x + tile.c; xx++) {
           occ[yy][xx] = -1;
         }
       }
@@ -446,32 +480,32 @@
     // ----------------------------
     // Packing complet (au demarrage)
     // ----------------------------
-    function canPlaceLocal(localOcc, x, y, c, r, W, H){
+    function canPlaceLocal(localOcc, x, y, c, r, W, H) {
       if (x + c > W || y + r > H) return false;
-      for (let yy = y; yy < y + r; yy++){
-        for (let xx = x; xx < x + c; xx++){
+      for (let yy = y; yy < y + r; yy++) {
+        for (let xx = x; xx < x + c; xx++) {
           if (localOcc[yy][xx]) return false;
         }
       }
       return true;
     }
 
-    function markLocal(localOcc, x, y, c, r, val=true){
-      for (let yy = y; yy < y + r; yy++){
-        for (let xx = x; xx < x + c; xx++){
+    function markLocal(localOcc, x, y, c, r, val = true) {
+      for (let yy = y; yy < y + r; yy++) {
+        for (let xx = x; xx < x + c; xx++) {
           localOcc[yy][xx] = val;
         }
       }
     }
 
-    function measureFreeRect(localOcc, x, y, W, H){
+    function measureFreeRect(localOcc, x, y, W, H) {
       let freeW = 0;
       while (x + freeW < W && !localOcc[y][x + freeW]) freeW++;
 
       let freeH = 0;
       outer:
-      while (y + freeH < H){
-        for (let xx = x; xx < x + freeW; xx++){
+      while (y + freeH < H) {
+        for (let xx = x; xx < x + freeW; xx++) {
           if (localOcc[y + freeH][xx]) break outer;
         }
         freeH++;
@@ -479,33 +513,33 @@
       return { freeW, freeH };
     }
 
-    function weightedPick(candidates){
+    function weightedPick(candidates) {
       // candidates = [{c,r,w}, ...]
       const total = candidates.reduce((s, it) => s + (it.w || 1), 0);
       let r = Math.random() * total;
-      for (const it of candidates){
+      for (const it of candidates) {
         r -= (it.w || 1);
         if (r <= 0) return it;
       }
       return candidates[candidates.length - 1];
     }
 
-    function pickSpanForHole(freeW, freeH){
+    function pickSpanForHole(freeW, freeH) {
       let candidates = SPANS.filter(s => s.c <= freeW && s.r <= freeH);
       if (!candidates.length) return { c: 1, r: 1, w: 1 };
 
       // On favorise les grosses tuiles si gros trou
-      candidates.sort((a,b) => (b.c*b.r) - (a.c*a.r));
+      candidates.sort((a, b) => (b.c * b.r) - (a.c * a.r));
       const top = candidates.slice(0, Math.min(6, candidates.length));
       return weightedPick(top);
     }
 
-    function packRectangles(width, height){
-      const localOcc = Array.from({length: height}, () => Array(width).fill(false));
+    function packRectangles(width, height) {
+      const localOcc = Array.from({ length: height }, () => Array(width).fill(false));
       const rects = [];
 
-      for (let y = 0; y < height; y++){
-        for (let x = 0; x < width; x++){
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
           if (localOcc[y][x]) continue;
 
           const { freeW, freeH } = measureFreeRect(localOcc, x, y, width, height);
@@ -514,7 +548,7 @@
           let c = span.c, r = span.r;
 
           // securite: degrade si ca passe pas
-          while (!canPlaceLocal(localOcc, x, y, c, r, width, height)){
+          while (!canPlaceLocal(localOcc, x, y, c, r, width, height)) {
             if (c > 1) c--;
             else if (r > 1) r--;
             else break;
@@ -531,20 +565,20 @@
     async function createTilesFromRects(rects, immediate = true) {
       const promises = [];
       const newTiles = [];
-      
+
       for (const r of rects) {
         const tile = makeTile(r.c, r.r, r.x, r.y);
         const id = tileIdCounter++;
         fillOccForTile(tile, id);
-        
+
         gridEl.appendChild(tile.el);
         const tileObj = { id, tile };
         tiles.push(tileObj);
         newTiles.push(tileObj);
-        
+
         promises.push(setTileImage(tile, immediate));
       }
-      
+
       await Promise.all(promises);
       return newTiles;
     }
@@ -555,8 +589,8 @@
       USED.clear();
       tiles = [];
       tileIdCounter = 0;
-      occ = Array.from({length: GRID_ROWS}, () => Array(GRID_COLS).fill(-1));
-      
+      occ = Array.from({ length: GRID_ROWS }, () => Array(GRID_COLS).fill(-1));
+
       const rects = packRectangles(GRID_COLS, GRID_ROWS);
       await createTilesFromRects(rects, true);
     }
@@ -565,11 +599,11 @@
     // Swap "brique par brique" = swap d'une zone
     // CORRECTION: on repack TOUTE la grille après suppression
     // ----------------------------
-    function rectIntersects(a, b){
+    function rectIntersects(a, b) {
       return !(a.x + a.c <= b.x || b.x + b.c <= a.x || a.y + a.r <= b.y || b.y + b.r <= a.y);
     }
 
-    function pickRandomZone(){
+    function pickRandomZone() {
       const z = ZONES[Math.floor(Math.random() * ZONES.length)];
       const zx = Math.floor(Math.random() * (GRID_COLS - z.c + 1));
       const zy = Math.floor(Math.random() * (GRID_ROWS - z.r + 1));
@@ -581,9 +615,9 @@
       zoneRunning = true;
       try {
         if (!tiles.length) return;
-        
+
         const zone = pickRandomZone();
-        
+
         // 1) trouve tuiles affectées
         const affected = [];
         for (const t of tiles) {
@@ -591,7 +625,7 @@
           if (rectIntersects(tile, zone)) affected.push(t);
         }
         if (!affected.length) return;
-        
+
         // 2) retire les tuiles
         for (const t of affected) {
           const tile = t.tile;
@@ -600,9 +634,9 @@
           tile.el.remove();
         }
         tiles = tiles.filter(t => !affected.includes(t));
-        
+
         // 3) repack pour combler les trous
-        const globalOcc = Array.from({length: GRID_ROWS}, () => Array(GRID_COLS).fill(false));
+        const globalOcc = Array.from({ length: GRID_ROWS }, () => Array(GRID_COLS).fill(false));
         for (const t of tiles) {
           const tile = t.tile;
           for (let yy = tile.y; yy < tile.y + tile.r; yy++) {
@@ -611,30 +645,30 @@
             }
           }
         }
-        
+
         const newRects = [];
         for (let y = 0; y < GRID_ROWS; y++) {
           for (let x = 0; x < GRID_COLS; x++) {
             if (globalOcc[y][x]) continue;
-            
+
             const { freeW, freeH } = measureFreeRect(globalOcc, x, y, GRID_COLS, GRID_ROWS);
             let span = pickSpanForHole(freeW, freeH);
             let c = span.c, r = span.r;
-            
+
             while (!canPlaceLocal(globalOcc, x, y, c, r, GRID_COLS, GRID_ROWS)) {
               if (c > 1) c--;
               else if (r > 1) r--;
               else break;
             }
-            
+
             markLocal(globalOcc, x, y, c, r, true);
             newRects.push({ x, y, c, r });
           }
         }
-        
+
         // 4) créer les nouvelles tuiles (fonction réutilisée)
         await createTilesFromRects(newRects, true);
-        
+
       } finally {
         zoneRunning = false;
       }
@@ -643,7 +677,7 @@
     // ----------------------------
     // En plus: swap d'image sur une tuile aleatoire (petit mouvement continu)
     // ----------------------------
-    async function swapOneTileImage(){
+    async function swapOneTileImage() {
       if (!tiles.length) return;
       const pick = tiles[Math.floor(Math.random() * tiles.length)].tile;
       await setTileImage(pick, false);
@@ -658,7 +692,7 @@
     let initRunning = false;
     let zoneRunning = false;
 
-    function scheduleZone(){
+    function scheduleZone() {
       const delay =
         TIMING.zoneSwapMin +
         Math.floor(Math.random() * (TIMING.zoneSwapMax - TIMING.zoneSwapMin + 1));
@@ -669,7 +703,7 @@
       }, delay);
     }
 
-    async function init(){
+    async function init() {
       if (initRunning) return;
       initRunning = true;
 
@@ -711,4 +745,5 @@
     });
   </script>
 </body>
+
 </html>
