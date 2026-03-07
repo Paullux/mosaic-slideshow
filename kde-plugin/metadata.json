@@ -1,0 +1,14 @@
+{
+  "KPlugin": {
+    "Id": "mosaic.slideshow",
+    "Name": "Mosaic Slideshow",
+    "Description": "Animated mosaic slideshow wallpaper",
+    "Version": "1.0",
+    "License": "MIT",
+    "Authors": [
+      {
+        "Name": "Paul Woisard"
+      }
+    ]
+  }
+}
